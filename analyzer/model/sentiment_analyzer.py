@@ -10,6 +10,7 @@ import random
 import string
 from tqdm import tqdm
 from analyzer.apps import AnalyzerConfig
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
 class Sentiment_analysis:
     proxies=None
@@ -28,9 +29,7 @@ class Sentiment_analysis:
             self.total_try=self.max_try=3
         for i in tqdm(range(self.start_page, self.end_page+1)):
             self.page_scraper(i)
-        self.reviews_df=pd.DataFrame(self.reviews_dict)
-        self.reviews_df["content"]=self.reviews_df["content"].apply(self.data_cleaner)
-        self.prediction()
+        self.formatting_reviews()
 
     def total_pages(self):
         response = self.request_wrapper(self.url.format(1))
@@ -62,7 +61,12 @@ class Sentiment_analysis:
             self.max_try=self.total_try
             break
         return response
-
+    
+    def formatting_reviews(self):
+        self.reviews_df=pd.DataFrame(self.reviews_dict)
+        self.reviews_df["content"]=self.reviews_df["content"].apply(self.data_cleaner)
+        self.sentiment_vader()
+        
     def page_scraper(self, page):
         try:
             response = self.request_wrapper(self.url.format(page))   
@@ -77,6 +81,7 @@ class Sentiment_analysis:
             self.reviews_dict['content'].extend(content_lst)
         except Exception as e:
             print ("Not able to scrape page {}".format(page), flush=True)
+
     def proxy_generator(self):
         response=requests.get("https://api.proxyscrape.com/?request=displayproxies&protocol=socks5&timeout=10000&country=all")
         soup = BeautifulSoup(response.content, 'html.parser')
@@ -94,6 +99,26 @@ class Sentiment_analysis:
         noise_free_review=[i for i in string_without_punc.split() if i not in stopWord ]
         noise_free_review=' '.join(noise_free_review)
         return noise_free_review
+
+    def sentiment_vader(self):
+        self.positive = 0
+        self.negative = 0
+        self.netural = 0
+        sid_obj = SentimentIntensityAnalyzer()
+        reviews_array=self.reviews_df['content'].values
+        for review in reviews_array:
+            sentiment_dict = sid_obj.polarity_scores(review)
+            if sentiment_dict['compound'] >= 0.05 :
+                self.positive+=1
+            elif sentiment_dict['compound'] <= - 0.05 :
+                self.negative+=1
+            else :
+                self.netural+=1
+        checkvalue = self.positive*(0.25)
+        if(checkvalue>self.negative):
+            self.resultant= 'product is worth to buy'
+        else:
+            self.resultant= 'product is not worth to buy'
 
     def prediction(self):
         reviews_array=self.reviews_df['content'].values

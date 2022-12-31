@@ -17,5 +17,6 @@ from django.urls import path
 from analyzer import views
 
 urlpatterns = [
-    path('',views.analyzing_reviews.as_view())
+    path('',views.Home.as_view(),name="home"),
+    path('scrape-url',views.analyzing_reviews.as_view(),name="scrape")
 ]
