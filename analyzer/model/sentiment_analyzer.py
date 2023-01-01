@@ -1,8 +1,10 @@
 from fake_useragent import UserAgent
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 import requests
 from bs4 import BeautifulSoup
 import math
-from keras.preprocessing.sequence import pad_sequences
+import numpy as np
+from keras_preprocessing.sequence import pad_sequences
 from nltk.corpus import stopwords
 import re
 import pandas as pd
@@ -10,15 +12,9 @@ import random
 import string
 from tqdm import tqdm
 from analyzer.apps import AnalyzerConfig
-from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
 class Sentiment_analysis:
-    proxies=None
-    reviews_dict=None
-    url=None
-    max_try=10
-    resultant=-1
-    total_try=5
+    proxies,reviews_dict,url,max_try,resultant,total_try=None,None,None,10,-1,5
     def __init__(self,url):
         self.url=url
         self.reviews_dict = { "content":[]}
@@ -81,6 +77,28 @@ class Sentiment_analysis:
             self.reviews_dict['content'].extend(content_lst)
         except Exception as e:
             print ("Not able to scrape page {}".format(page), flush=True)
+        
+    def prediction(self):
+        reviews_array=self.reviews_df['content'].values
+        x_data=AnalyzerConfig.tokenizer.texts_to_sequences(reviews_array)
+        x_data=pad_sequences(x_data,padding="pre")
+        ans=AnalyzerConfig.loaded_model.predict(x_data)
+        self.positive=0
+        self.negative=0
+        self.netural=0
+        for i in ans:
+            result_index=np.argmax(i[0])
+            if(result_index==0):
+                self.negative+=1
+            elif(result_index==1):
+                self.netural+=1
+            else:
+                self.positive+=1            
+        checkvalue = (self.positive+self.negative)*(0.7)
+        if(checkvalue<=self.positive):
+            self.resultant= 'product is worth to buy'
+        else:
+            self.resultant= 'product is not worth to buy'
 
     def proxy_generator(self):
         response=requests.get("https://api.proxyscrape.com/?request=displayproxies&protocol=socks5&timeout=10000&country=all")
@@ -99,7 +117,7 @@ class Sentiment_analysis:
         noise_free_review=[i for i in string_without_punc.split() if i not in stopWord ]
         noise_free_review=' '.join(noise_free_review)
         return noise_free_review
-
+        
     def sentiment_vader(self):
         self.positive = 0
         self.negative = 0
@@ -114,28 +132,8 @@ class Sentiment_analysis:
                 self.negative+=1
             else :
                 self.netural+=1
-        checkvalue = self.positive*(0.25)
-        if(checkvalue>self.negative):
+        checkvalue = (self.positive+self.negative)*(0.7)
+        if(checkvalue<=self.positive):
             self.resultant= 'product is worth to buy'
         else:
             self.resultant= 'product is not worth to buy'
-
-    def prediction(self):
-        reviews_array=self.reviews_df['content'].values
-        x_data=AnalyzerConfig.tokenizer.texts_to_sequences(reviews_array)
-        x_data=pad_sequences(x_data,padding="pre")
-        ans=AnalyzerConfig.loaded_model.predict(x_data)
-        self.poscount=0
-        self.negcount=0
-        for i in ans:
-            if(i>=0.5):
-                self.poscount+=1
-            else:
-                self.negcount+=1
-        checkvalue=self.poscount*(0.5)
-        if(checkvalue>self.negcount):
-            self.resultant= "product is worth to buy"
-        else:
-            self.resultant="product is not worth to buy"
-
-
